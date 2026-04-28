@@ -88,7 +88,6 @@
     background-image: var(--gradient-glow);
     background-attachment: fixed;
   }
-  html { @apply dark; }
 }
 
 @layer components {
