@@ -48,7 +48,7 @@ const Customers = () => {
     const amt = parseFloat(payAmount);
     if (!amt || amt <= 0) { toast.error("Enter amount"); return; }
     if (amt > Number(detail.due_balance)) { toast.error("Exceeds due balance"); return; }
-    const { error } = await supabase.from("due_payments").insert({ customer_id: detail.id, amount: amt, method: payMethod });
+    const { error } = await supabase.from("due_payments").insert({ customer_id: detail.id, amount: amt, method: payMethod as any });
     if (error) { toast.error(error.message); return; }
     await supabase.from("customers").update({ due_balance: Number(detail.due_balance) - amt }).eq("id", detail.id);
     toast.success("Payment recorded"); setPayAmount("");
