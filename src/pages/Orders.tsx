@@ -33,6 +33,11 @@ const Orders = () => {
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id: string, status: string) => {
+    if (status === "cancelled" && !canCancel) {
+      toast.error("Cancelling orders requires permission");
+      return;
+    }
+    if (status === "cancelled" && !confirm("Cancel this order? This cannot be undone.")) return;
     const { error } = await supabase.from("orders").update({ status: status as any }).eq("id", id);
     if (error) toast.error(error.message); else { toast.success("Updated"); load(); }
   };
@@ -109,7 +114,14 @@ const Orders = () => {
             <div className="grid grid-cols-3 gap-1">
               <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "preparing")}>Preparing</Button>
               <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "completed")}>Complete</Button>
-              <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "cancelled")}>Cancel</Button>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => setStatus(o.id, "cancelled")}
+                disabled={!canCancel || o.status === "cancelled"}
+                title={canCancel ? "Cancel order" : "Requires admin permission"}
+              >
+                {canCancel ? "Cancel" : <><Lock className="w-3 h-3 mr-1 inline" />Cancel</>}
+              </Button>
             </div>
           </Card>
         ))}
