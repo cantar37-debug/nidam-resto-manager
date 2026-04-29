@@ -21,24 +21,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchRole = async (userId: string, attempts = 5) => {
+    for (let i = 0; i < attempts; i++) {
+      const { data, error } = await supabase
+        .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+      if (!error) {
+        setRole((data?.role as Role) ?? null);
+        return;
+      }
+      // transient backend error — wait and retry
+      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+    }
+  };
+
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       if (s?.user) {
-        setTimeout(async () => {
-          const { data } = await supabase.from("user_roles").select("role").eq("user_id", s.user.id).maybeSingle();
-          setRole((data?.role as Role) ?? null);
-        }, 0);
+        setTimeout(() => { fetchRole(s.user.id); }, 0);
       } else {
         setRole(null);
       }
     });
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
-      if (s?.user) {
-        const { data } = await supabase.from("user_roles").select("role").eq("user_id", s.user.id).maybeSingle();
-        setRole((data?.role as Role) ?? null);
-      }
+      if (s?.user) await fetchRole(s.user.id);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
