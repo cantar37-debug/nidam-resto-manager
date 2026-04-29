@@ -5,16 +5,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Receipt as ReceiptIcon, Search, Printer } from "lucide-react";
+import { Receipt as ReceiptIcon, Search, Printer, Lock } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Receipt, ReceiptData, printReceipt } from "@/components/Receipt";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const STATUSES = ["pending", "preparing", "completed", "cancelled", "due"] as const;
 
 const Orders = () => {
+  const { canCancel } = usePermissions();
   const [orders, setOrders] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
