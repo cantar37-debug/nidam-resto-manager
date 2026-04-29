@@ -31,8 +31,9 @@ const Settings = () => {
     if (error) toast.error(error.message); else toast.success("Saved");
   };
 
-  if (!s) return <div className="p-6">Loading…</div>;
+  if (role === null) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (role !== "admin") return <div className="p-6">Admin only.</div>;
+  if (!s) return <div className="p-6">Loading…</div>;
 
   return (
     <div className="p-6 space-y-4 animate-fade-in max-w-3xl">
