@@ -16,7 +16,7 @@ interface StaffRow {
   username: string | null;
   full_name: string | null;
   phone: string | null;
-  user_roles: { role: string }[] | null;
+  user_roles: { role: string }[];
 }
 
 const Settings = () => {
@@ -26,15 +26,23 @@ const Settings = () => {
   const [staff, setStaff] = useState<StaffRow[]>([]);
 
   const load = async () => {
-    const [st, p] = await Promise.all([
+    const [st, p, r] = await Promise.all([
       supabase.from("settings").select("*").eq("id", 1).maybeSingle(),
-      supabase.from("profiles").select("id, username, full_name, phone, user_roles(role)"),
+      supabase.from("profiles").select("id, username, full_name, phone"),
+      supabase.from("user_roles").select("user_id, role"),
     ]);
-    setS(st.data); setStaff((p.data || []) as StaffRow[]);
+    setS(st.data);
+    const roleMap = new Map<string, string>();
+    (r.data || []).forEach((row: any) => roleMap.set(row.user_id, row.role));
+    const rows: StaffRow[] = (p.data || []).map((u: any) => ({
+      id: u.id, username: u.username, full_name: u.full_name, phone: u.phone,
+      user_roles: roleMap.has(u.id) ? [{ role: roleMap.get(u.id)! }] : [],
+    }));
+    setStaff(rows);
   };
   useEffect(() => { load(); }, []);
 
-  const adminCount = staff.filter((u) => u.user_roles?.some((r) => r.role === "admin")).length;
+  const adminCount = staff.filter((u) => u.user_roles.some((r) => r.role === "admin")).length;
 
   const save = async () => {
     const { error } = await supabase.from("settings").update({
@@ -45,7 +53,7 @@ const Settings = () => {
   };
 
   const setUserRole = async (u: StaffRow, newRole: "admin" | "cashier") => {
-    const currentRole = u.user_roles?.[0]?.role;
+    const currentRole = u.user_roles[0]?.role;
     if (currentRole === newRole) return;
 
     // Safeguard: prevent removing the last admin
@@ -148,7 +156,7 @@ const Settings = () => {
         </p>
         <div className="space-y-2">
           {staff.map((u) => {
-            const userRole = u.user_roles?.[0]?.role || "—";
+            const userRole = u.user_roles[0]?.role || "—";
             const isMe = u.id === user?.id;
             const isLastAdmin = userRole === "admin" && adminCount <= 1;
             return (
