@@ -2,26 +2,29 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fmtMoney } from "@/lib/format";
 import {
-  Search, Plus, Minus, Trash2, ShoppingCart, Pause, Play, X, CreditCard, Users,
+  Search, Plus, Minus, Trash2, ShoppingCart, Pause, Play, X, CreditCard, Lock, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { Receipt, ReceiptData, printReceipt } from "@/components/Receipt";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 interface Category { id: string; name: string; }
 interface Product { id: string; name: string; price: number; category_id: string | null; image_url: string | null; }
 
 const POS = () => {
   const { user } = useAuth();
+  const { canDiscount, canCancel, canOverridePrice, isAdmin } = usePermissions();
   const cart = useCart();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -33,6 +36,10 @@ const POS = () => {
   const [autoPrint, setAutoPrint] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [restaurant, setRestaurant] = useState<any>(null);
+
+  // Price override dialog
+  const [priceEditId, setPriceEditId] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState("");
 
   useEffect(() => { (async () => {
     const [cats, prods, settings] = await Promise.all([
@@ -58,10 +65,27 @@ const POS = () => {
     return p;
   }, [products, activeCat, search]);
 
+  const tryRemove = (id: string) => {
+    if (!canCancel) { toast.error("Removing items requires permission"); return; }
+    cart.remove(id);
+  };
+
+  const openPriceEdit = (id: string, current: number) => {
+    if (!canOverridePrice) { toast.error("Price override not allowed"); return; }
+    setPriceEditId(id);
+    setPriceInput(String(current));
+  };
+  const savePriceEdit = () => {
+    const v = parseFloat(priceInput);
+    if (isNaN(v) || v < 0) { toast.error("Invalid price"); return; }
+    if (priceEditId) cart.setPrice(priceEditId, v);
+    setPriceEditId(null);
+    toast.success("Price updated");
+  };
+
   const checkout = async (data: { splits: any[]; customerId: string | null; customerName: string; customerPhone: string }) => {
     if (!cart.items.length) return;
     try {
-      // Resolve customer (create if needed and Due included)
       let customerId = data.customerId;
       const dueAmount = data.splits.filter((s) => s.method === "due").reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
@@ -75,9 +99,9 @@ const POS = () => {
       }
 
       const subtotal = cart.subtotal;
-      const total = subtotal;
+      const total = cart.total;
       const paid = data.splits.filter((s) => s.method !== "due").reduce((sum, s) => sum + Number(s.amount || 0), 0);
-      const status = dueAmount > 0 ? (paid > 0 ? "due" : "due") : "completed";
+      const status = dueAmount > 0 ? "due" : "completed";
 
       const { data: order, error: oerr } = await supabase
         .from("orders")
@@ -85,6 +109,7 @@ const POS = () => {
           customer_id: customerId, table_number: cart.table || null,
           subtotal, total, paid_amount: paid, due_amount: dueAmount,
           status, cashier_id: user?.id,
+          notes: cart.discount > 0 ? `Discount: ${fmtMoney(cart.discount)}` : null,
         })
         .select().single();
       if (oerr) throw oerr;
@@ -104,13 +129,11 @@ const POS = () => {
         if (perr) throw perr;
       }
 
-      // Update customer due_balance
       if (customerId && dueAmount > 0) {
         const { data: cur } = await supabase.from("customers").select("due_balance").eq("id", customerId).single();
         await supabase.from("customers").update({ due_balance: Number(cur?.due_balance || 0) + dueAmount }).eq("id", customerId);
       }
 
-      // Build receipt
       const r: ReceiptData = {
         order_number: order.order_number,
         created_at: order.created_at,
@@ -148,7 +171,7 @@ const POS = () => {
               className={`w-full text-left p-3 rounded-lg mb-1 text-sm font-medium transition ${activeCat === c.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
             >{c.name}</button>
           ))}
-          {!categories.length && <p className="text-xs text-muted-foreground p-3">No categories. Add some in Inventory or Settings.</p>}
+          {!categories.length && <p className="text-xs text-muted-foreground p-3">No categories. Add some in Categories or Inventory.</p>}
         </Card>
       </div>
 
@@ -186,6 +209,7 @@ const POS = () => {
             <ShoppingCart className="w-5 h-5 text-primary" />
             <span className="font-semibold">Cart</span>
             <Badge variant="secondary" className="ml-auto">{cart.items.length}</Badge>
+            {isAdmin && <Badge variant="outline" className="text-xs border-primary/40 text-primary">Admin</Badge>}
           </div>
 
           <div className="p-3 grid grid-cols-2 gap-2 border-b border-border">
@@ -201,13 +225,28 @@ const POS = () => {
               <div key={it.product_id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{it.name}</div>
-                  <div className="text-xs text-muted-foreground">{fmtMoney(it.price)} × {it.quantity} = <span className="text-primary font-semibold">{fmtMoney(it.price * it.quantity)}</span></div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    {fmtMoney(it.price)}
+                    {canOverridePrice && (
+                      <button onClick={() => openPriceEdit(it.product_id, it.price)} className="hover:text-primary" title="Override price">
+                        <Pencil className="w-3 h-3 inline" />
+                      </button>
+                    )}
+                    × {it.quantity} = <span className="text-primary font-semibold">{fmtMoney(it.price * it.quantity)}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => cart.setQty(it.product_id, it.quantity - 1)}><Minus className="w-3 h-3" /></Button>
                   <span className="w-6 text-center text-sm">{it.quantity}</span>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => cart.setQty(it.product_id, it.quantity + 1)}><Plus className="w-3 h-3" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => cart.remove(it.product_id)}><Trash2 className="w-3 h-3" /></Button>
+                  <Button
+                    size="icon" variant="ghost"
+                    className={`h-7 w-7 ${canCancel ? "text-destructive" : "text-muted-foreground/50"}`}
+                    onClick={() => tryRemove(it.product_id)}
+                    title={canCancel ? "Remove" : "Removing requires permission"}
+                  >
+                    {canCancel ? <Trash2 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                  </Button>
                 </div>
               </div>
             ))}
@@ -215,7 +254,23 @@ const POS = () => {
 
           <div className="p-3 border-t border-border space-y-2">
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{fmtMoney(cart.subtotal)}</span></div>
-            <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-primary">{fmtMoney(cart.subtotal)}</span></div>
+
+            {/* Discount row */}
+            <div className="flex items-center justify-between text-sm gap-2">
+              <span className="text-muted-foreground flex items-center gap-1">
+                Discount {!canDiscount && <Lock className="w-3 h-3" />}
+              </span>
+              <Input
+                type="number" step="0.01" min="0"
+                disabled={!canDiscount}
+                value={cart.discount || ""}
+                onChange={(e) => cart.setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-24 h-8 text-right"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="text-primary">{fmtMoney(cart.total)}</span></div>
 
             <div className="grid grid-cols-3 gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={cart.hold} disabled={!cart.items.length}>
@@ -224,8 +279,13 @@ const POS = () => {
               <Button variant="outline" size="sm" onClick={() => setHeldOpen(true)}>
                 <Play className="w-3 h-3 mr-1" /> Held ({cart.held.length})
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { if (confirm("Clear cart?")) cart.clear(); }}>
-                <X className="w-3 h-3 mr-1" /> Clear
+              <Button
+                variant="outline" size="sm"
+                disabled={!canCancel || !cart.items.length}
+                onClick={() => { if (confirm("Clear cart?")) cart.clear(); }}
+                title={canCancel ? "Clear cart" : "Requires permission"}
+              >
+                {canCancel ? <X className="w-3 h-3 mr-1" /> : <Lock className="w-3 h-3 mr-1" />} Clear
               </Button>
             </div>
 
@@ -234,7 +294,7 @@ const POS = () => {
               disabled={!cart.items.length}
               onClick={() => setPayOpen(true)}
             >
-              <CreditCard className="w-5 h-5 mr-2" /> Pay {fmtMoney(cart.subtotal)}
+              <CreditCard className="w-5 h-5 mr-2" /> Pay {fmtMoney(cart.total)}
             </Button>
 
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -247,7 +307,7 @@ const POS = () => {
 
       <PaymentDialog
         open={payOpen} onOpenChange={setPayOpen}
-        total={cart.subtotal}
+        total={cart.total}
         customerId={cart.customerId} customerName={cart.customerName}
         onConfirm={checkout}
       />
@@ -271,6 +331,21 @@ const POS = () => {
               );
             })}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Price override dialog */}
+      <Dialog open={!!priceEditId} onOpenChange={(v) => !v && setPriceEditId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Override price</DialogTitle></DialogHeader>
+          <div>
+            <Label>New unit price ($)</Label>
+            <Input type="number" step="0.01" min="0" value={priceInput} onChange={(e) => setPriceInput(e.target.value)} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPriceEditId(null)}>Cancel</Button>
+            <Button onClick={savePriceEdit} className="bg-gradient-emerald">Apply</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
