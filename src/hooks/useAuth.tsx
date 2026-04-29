@@ -21,17 +21,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchRole = async (userId: string, attempts = 5) => {
+  const fetchRole = async (userId: string, attempts = 8) => {
     for (let i = 0; i < attempts; i++) {
-      const { data, error } = await supabase
-        .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-      if (!error) {
-        setRole((data?.role as Role) ?? null);
-        return;
-      }
-      // transient backend error — wait and retry
-      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+      try {
+        const { data, error } = await supabase
+          .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+        if (!error) {
+          setRole((data?.role as Role) ?? "cashier");
+          return;
+        }
+      } catch { /* network error - retry */ }
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
     }
+    // After all retries failed, default to cashier so the app is usable
+    setRole("cashier");
   };
 
   useEffect(() => {
@@ -43,10 +46,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRole(null);
       }
     });
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s?.user) await fetchRole(s.user.id);
       setLoading(false);
+      if (s?.user) {
+        setTimeout(() => { fetchRole(s.user.id); }, 0);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
