@@ -28,7 +28,8 @@ export const AppSidebar = () => {
   const { pathname } = useLocation();
   const { role, signOut, user } = useAuth();
 
-  const visible = items.filter((i) => i.role === "any" || role === "admin");
+  // Show admin items while role is loading (null) or when admin; hide only for confirmed cashier
+  const visible = items.filter((i) => i.role === "any" || role !== "cashier");
 
   return (
     <Sidebar collapsible="icon">
