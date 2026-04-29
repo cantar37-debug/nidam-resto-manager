@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Upload, Download, Edit, Trash2, Package, AlertTriangle } from "lucide-react";
+import { Plus, Upload, Download, Edit, Trash2, Package, AlertTriangle, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Product { id: string; name: string; price: number; category_id: string | null; image_url: string | null; active: boolean; }
 interface Category { id: string; name: string; }
 
 const Inventory = () => {
+  const { isAdmin } = usePermissions();
   const fileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState("menu");
   const [products, setProducts] = useState<Product[]>([]);
@@ -137,9 +139,14 @@ const Inventory = () => {
 
   return (
     <div className="p-6 space-y-4 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Inventory & Menu</h1>
-        <p className="text-muted-foreground text-sm">Manage products, categories and stock items</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inventory & Menu</h1>
+          <p className="text-muted-foreground text-sm">Manage products, categories and stock items</p>
+        </div>
+        {!isAdmin && (
+          <Badge variant="outline" className="gap-1"><Lock className="w-3 h-3" /> Read-only (cashier)</Badge>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -150,8 +157,8 @@ const Inventory = () => {
 
         <TabsContent value="menu" className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => openProd()}><Plus className="w-4 h-4 mr-1" />Add Product</Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4 mr-1" />Import Excel</Button>
+            <Button onClick={() => openProd()} disabled={!isAdmin}><Plus className="w-4 h-4 mr-1" />Add Product</Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={!isAdmin}><Upload className="w-4 h-4 mr-1" />Import Excel</Button>
             <Button variant="outline" onClick={exportXlsx}><Download className="w-4 h-4 mr-1" />Export Excel</Button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onFile} className="hidden" />
           </div>
@@ -168,8 +175,8 @@ const Inventory = () => {
                     <td className="p-3 text-muted-foreground">{cats.find((c) => c.id === p.category_id)?.name || "—"}</td>
                     <td className="p-3 text-right font-semibold text-primary">{fmtMoney(p.price)}</td>
                     <td className="p-3 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => openProd(p)}><Edit className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => delProd(p.id)}><Trash2 className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => openProd(p)} disabled={!isAdmin}><Edit className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => delProd(p.id)} disabled={!isAdmin}><Trash2 className="w-4 h-4" /></Button>
                     </td>
                   </tr>
                 ))}
@@ -180,7 +187,7 @@ const Inventory = () => {
         </TabsContent>
 
         <TabsContent value="stock" className="space-y-3">
-          <Button onClick={() => openInv()}><Plus className="w-4 h-4 mr-1" />Add Stock Item</Button>
+          <Button onClick={() => openInv()} disabled={!isAdmin}><Plus className="w-4 h-4 mr-1" />Add Stock Item</Button>
           <Card className="glass-card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
@@ -196,8 +203,8 @@ const Inventory = () => {
                       <td className="p-3 text-right text-muted-foreground">{i.low_stock_threshold}</td>
                       <td className="p-3 text-right">{fmtMoney(i.cost_per_unit)}</td>
                       <td className="p-3 text-right">
-                        <Button size="icon" variant="ghost" onClick={() => openInv(i)}><Edit className="w-4 h-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => delInv(i.id)}><Trash2 className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => openInv(i)} disabled={!isAdmin}><Edit className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => delInv(i.id)} disabled={!isAdmin}><Trash2 className="w-4 h-4" /></Button>
                       </td>
                     </tr>
                   );

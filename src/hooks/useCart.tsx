@@ -21,17 +21,21 @@ interface CartContextValue {
   table: string;
   customerId: string | null;
   customerName: string;
+  discount: number;
   add: (p: { id: string; name: string; price: number }) => void;
   remove: (productId: string) => void;
   setQty: (productId: string, q: number) => void;
+  setPrice: (productId: string, price: number) => void;
   setTable: (t: string) => void;
   setCustomer: (id: string | null, name: string) => void;
+  setDiscount: (n: number) => void;
   clear: () => void;
   hold: () => void;
   resume: (id: string) => void;
   removeHeld: (id: string) => void;
   held: HeldOrder[];
   subtotal: number;
+  total: number;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -45,6 +49,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [table, setTable] = useState("");
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
+  const [discount, setDiscount] = useState(0);
   const [held, setHeld] = useState<HeldOrder[]>(() => {
     try { return JSON.parse(localStorage.getItem(HELD_KEY) || "[]"); } catch { return []; }
   });
@@ -61,8 +66,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const setQty = (id: string, q: number) => setItems((cur) => q <= 0
     ? cur.filter((i) => i.product_id !== id)
     : cur.map((i) => i.product_id === id ? { ...i, quantity: q } : i));
+  const setPrice = (id: string, price: number) => setItems((cur) =>
+    cur.map((i) => i.product_id === id ? { ...i, price: Math.max(0, price) } : i));
   const setCustomer = (id: string | null, name: string) => { setCustomerId(id); setCustomerName(name); };
-  const clear = () => { setItems([]); setTable(""); setCustomerId(null); setCustomerName(""); };
+  const clear = () => { setItems([]); setTable(""); setCustomerId(null); setCustomerName(""); setDiscount(0); };
   const hold = () => {
     if (!items.length) return;
     setHeld((cur) => [...cur, {
@@ -81,12 +88,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const removeHeld = (id: string) => setHeld((cur) => cur.filter((o) => o.id !== id));
 
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const total = Math.max(0, subtotal - (discount || 0));
 
   return (
     <CartContext.Provider value={{
-      items, table, customerId, customerName,
-      add, remove, setQty, setTable, setCustomer,
-      clear, hold, resume, removeHeld, held, subtotal,
+      items, table, customerId, customerName, discount,
+      add, remove, setQty, setPrice, setTable, setCustomer, setDiscount,
+      clear, hold, resume, removeHeld, held, subtotal, total,
     }}>{children}</CartContext.Provider>
   );
 };

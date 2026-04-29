@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingCart, Receipt, Package, Wallet,
-  BarChart3, Users, Settings, ChefHat, LogOut,
+  BarChart3, Users, Settings, ChefHat, LogOut, FolderTree,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -16,6 +16,7 @@ const items = [
   { title: "POS", url: "/pos", icon: ShoppingCart, role: "any" as const },
   { title: "Orders", url: "/orders", icon: Receipt, role: "any" as const },
   { title: "Inventory", url: "/inventory", icon: Package, role: "admin" as const },
+  { title: "Categories", url: "/categories", icon: FolderTree, role: "admin" as const },
   { title: "Expenses", url: "/expenses", icon: Wallet, role: "admin" as const },
   { title: "Sales Reports", url: "/reports", icon: BarChart3, role: "admin" as const },
   { title: "Customers", url: "/customers", icon: Users, role: "any" as const },

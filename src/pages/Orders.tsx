@@ -5,16 +5,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Receipt as ReceiptIcon, Search, Printer } from "lucide-react";
+import { Receipt as ReceiptIcon, Search, Printer, Lock } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Receipt, ReceiptData, printReceipt } from "@/components/Receipt";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const STATUSES = ["pending", "preparing", "completed", "cancelled", "due"] as const;
 
 const Orders = () => {
+  const { canCancel } = usePermissions();
   const [orders, setOrders] = useState<any[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -31,6 +33,11 @@ const Orders = () => {
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id: string, status: string) => {
+    if (status === "cancelled" && !canCancel) {
+      toast.error("Cancelling orders requires permission");
+      return;
+    }
+    if (status === "cancelled" && !confirm("Cancel this order? This cannot be undone.")) return;
     const { error } = await supabase.from("orders").update({ status: status as any }).eq("id", id);
     if (error) toast.error(error.message); else { toast.success("Updated"); load(); }
   };
@@ -107,7 +114,14 @@ const Orders = () => {
             <div className="grid grid-cols-3 gap-1">
               <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "preparing")}>Preparing</Button>
               <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "completed")}>Complete</Button>
-              <Button size="sm" variant="outline" onClick={() => setStatus(o.id, "cancelled")}>Cancel</Button>
+              <Button
+                size="sm" variant="outline"
+                onClick={() => setStatus(o.id, "cancelled")}
+                disabled={!canCancel || o.status === "cancelled"}
+                title={canCancel ? "Cancel order" : "Requires admin permission"}
+              >
+                {canCancel ? "Cancel" : <><Lock className="w-3 h-3 mr-1 inline" />Cancel</>}
+              </Button>
             </div>
           </Card>
         ))}
